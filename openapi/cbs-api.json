@@ -1,0 +1,4455 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "CBS API",
+        "description": "Simplified core banking system: customers, loan products, loans, ledger and end of day.\n\nAuthentication uses a bearer token. Call `POST /api/auth/login` with `{\"username\": \"...\", \"password\": \"...\"}`, then click **Authorize** and paste the `accessToken` from the response. Each operation needs the permission its description names.",
+        "version": "0.1.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:18080",
+            "description": "Generated server url"
+        }
+    ],
+    "security": [
+        {
+            "bearer-jwt": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Users",
+            "description": "User administration. Administrators never choose passwords: creating a user or resetting a password returns a one-time password, shown only in that response, which the user must change at first login."
+        },
+        {
+            "name": "Roles",
+            "description": "Roles and the permissions they bundle. Changes apply to every holder from their next request."
+        },
+        {
+            "name": "Authentication",
+            "description": "Login, logout, token refresh, the current user and password changes. Send the token from login as `Authorization: Bearer <token>` on every other request."
+        },
+        {
+            "name": "Loans",
+            "description": "The loan lifecycle: APPLIED \u2192 APPROVED \u2192 ACTIVE \u2192 CLOSED, with REJECTED and WRITTEN_OFF as the other ends. Every money movement is posted to the ledger."
+        },
+        {
+            "name": "Loan products",
+            "description": "The loan products on offer. A loan keeps a copy of its product, so changes to the catalog never affect existing loans."
+        },
+        {
+            "name": "Customers",
+            "description": "Individuals and lending groups, identity checks (KYC) and customer status."
+        },
+        {
+            "name": "Operations",
+            "description": "The business date and the end-of-day batch."
+        },
+        {
+            "name": "Ledger",
+            "description": "The double-entry general ledger: chart of accounts, balances, statements, manual entries and period close."
+        },
+        {
+            "name": "Audit",
+            "description": "The record of every changing request, including refused and failed ones."
+        }
+    ],
+    "paths": {
+        "/api/users/{id}/roles": {
+            "put": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Replace a user's roles",
+                "description": "Sets the user's roles to exactly the set given. Refused if no active user would be left holding `USER_MANAGE`. Requires `USER_MANAGE`.",
+                "operationId": "assignRoles",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RolesRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/roles/{name}/permissions": {
+            "put": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Replace a role's permissions",
+                "description": "Sets the role's permissions to exactly the set given. Refused if no active user would be left holding `USER_MANAGE`. Requires `ROLE_MANAGE`.",
+                "operationId": "replacePermissions",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PermissionsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List users",
+                "description": "Every user, without password hashes. Requires `USER_MANAGE`.",
+                "operationId": "all",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/UserView"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Create a user",
+                "description": "Creates an active user with the given roles and returns their one-time password. Usernames are unique and every role must exist. Requires `USER_MANAGE`.",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateUserRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IssuedPasswordView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/unlock": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Unlock a user",
+                "description": "Lifts a lockout after failed logins before it expires. Requires `USER_MANAGE`.",
+                "operationId": "unlock",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/password-reset": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Reset a user's password",
+                "description": "Issues a new one-time password, returned only in this response, clears any lockout and requires a change at the next login. Requires `USER_MANAGE`.",
+                "operationId": "resetPassword",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IssuedPasswordView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/enable": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Enable a user",
+                "description": "Lets a disabled user log in again. Requires `USER_MANAGE`.",
+                "operationId": "enable",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/disable": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Disable a user",
+                "description": "The user can no longer log in, and tokens they hold stop working on the next request. You cannot disable yourself, or the last active user holding `USER_MANAGE`. Requires `USER_MANAGE`.",
+                "operationId": "disable",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/roles": {
+            "get": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "List roles",
+                "description": "Every role with its permissions. Requires `ROLE_MANAGE`.",
+                "operationId": "all_1",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Role"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Create a role",
+                "description": "Creates a role with a set of permissions. Names are unique. Requires `ROLE_MANAGE`.",
+                "operationId": "create_1",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products": {
+            "get": {
+                "tags": [
+                    "Loan products"
+                ],
+                "summary": "List active products",
+                "description": "Products open for new loans, ordered by code. Requires login only.",
+                "operationId": "active",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LoanProduct"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Loan products"
+                ],
+                "summary": "Register a product",
+                "description": "Adds an active product: who may borrow, interest method and day count, repayment frequency, the allowed ranges of rate, principal and instalments, disbursement fees, penalty, the order repayments settle what is due (default: penalty, fee, interest, principal) and the ledger accounts it posts to. Rates are annual percentages; amounts are decimal strings. Requires `PRODUCT_MANAGE`.",
+                "operationId": "register",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProductRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanProduct"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/{code}/retire": {
+            "post": {
+                "tags": [
+                    "Loan products"
+                ],
+                "summary": "Retire a product",
+                "description": "Stops new loans on the product. Loans already made are unaffected. Retiring a retired product does nothing. Requires `PRODUCT_MANAGE`.",
+                "operationId": "retire",
+                "parameters": [
+                    {
+                        "name": "code",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanProduct"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans": {
+            "get": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "List loans by status",
+                "description": "Every loan in the given status. Requires login only.",
+                "operationId": "byStatus",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "APPLIED",
+                                "APPROVED",
+                                "REJECTED",
+                                "ACTIVE",
+                                "CLOSED",
+                                "WRITTEN_OFF"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LoanView"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Apply for a loan",
+                "description": "Records an application in status APPLIED. The borrower must be eligible for credit, and the terms must be allowed by the product for that kind of borrower; every broken rule is listed in the error. Give exactly one of `annualRatePercent` and `monthlyRatePercent`. Requires `LOAN_APPLY`.",
+                "operationId": "apply",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApplyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/write-off": {
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Write off a loan",
+                "description": "Removes an ACTIVE loan's principal from the portfolio against the provision held, charging any shortfall to provision expense, and reverses accrued interest and penalty that were never paid. The loan becomes WRITTEN_OFF. Requires `LOAN_WRITE_OFF`.",
+                "operationId": "writeOff",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NoteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/repayments": {
+            "get": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "List repayments",
+                "description": "Every repayment taken on the loan, including reversed ones. Requires login only.",
+                "operationId": "repayments",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Repayment"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Take a repayment",
+                "description": "Accrues interest through the business date, then applies the payment to what is due (in the product's allocation order, oldest instalment first) and any remainder to future instalments. A payment above the payoff amount is refused; one that settles the loan closes it. `reference` is the payment's unique id: resending it returns the original repayment instead of taking the money twice. `paidInto` defaults to the product's disbursement source account. Requires `REPAYMENT_TAKE`.",
+                "operationId": "repay",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RepaymentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Repayment"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/repayments/{reference}/reversal": {
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Reverse a repayment",
+                "description": "Reverses a repayment in the ledger and undoes its allocation. Only the latest repayment still in force can be reversed; reversing the one that closed a loan reopens it. Resending the same `reversalReference` does nothing. Requires `REPAYMENT_REVERSE`.",
+                "operationId": "reverseRepayment",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reference",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReversalRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/reject": {
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Reject a loan",
+                "description": "Moves an APPLIED loan to REJECTED, with an optional note. Requires `LOAN_APPROVE`.",
+                "operationId": "reject",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NoteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/disburse": {
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Disburse a loan",
+                "description": "Pays out an APPROVED loan on the business date and makes it ACTIVE. The repayment schedule is fixed from that date and disbursement fees are deducted from the amount paid out. Posts: Dr loan portfolio, Cr disbursement source and fee income. Requires `LOAN_DISBURSE`.",
+                "operationId": "disburse",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/approve": {
+            "post": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Approve a loan",
+                "description": "Moves an APPLIED loan to APPROVED. The approver must not be the user who entered the application (maker-checker), and the borrower must still be eligible. Requires `LOAN_APPROVE`.",
+                "operationId": "approve",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NoteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/periods/close": {
+            "post": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Close accounting periods",
+                "description": "Closes every month up to and including `through` (format `YYYY-MM`), which must be before the current business month. Nothing can be posted into a closed month afterwards, and closed months are never reopened. Requires `PERIOD_CLOSE`.",
+                "operationId": "closePeriods",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClosePeriodRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/entries": {
+            "post": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Post a manual journal entry",
+                "description": "Posts a balanced entry on the business date; debits must equal credits in each currency. Every account must exist and be open, and the period must not be closed. `id` is chosen by the caller: resending the same entry returns the original, while the same id with different content is refused. Entries are never changed afterwards; correct one with a new entry. Requires `JOURNAL_POST`.",
+                "operationId": "post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ManualEntryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntry"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/end-of-day": {
+            "post": {
+                "tags": [
+                    "Operations"
+                ],
+                "summary": "Run end of day",
+                "description": "For every active loan: accrues interest through the business date, charges penalty on amounts overdue beyond the grace days, classifies the loan by days past due and sets its provision. Each loan is processed on its own; failures are reported and the rest carry on. Only if every loan succeeded (`complete` is true) does the business date move to the next day. Safe to rerun after fixing a failure. Requires `END_OF_DAY_RUN`.",
+                "operationId": "runEndOfDay",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EndOfDayView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/reinstate": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Reinstate a customer",
+                "description": "Returns a blacklisted customer to active. Requires `CUSTOMER_STATUS_MANAGE`.",
+                "operationId": "reinstate",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "oneOf": [
+                                        {
+                                            "$ref": "#/components/schemas/Group"
+                                        },
+                                        {
+                                            "$ref": "#/components/schemas/Individual"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/members": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Add a group member",
+                "description": "Adds a customer to an active group, within the group size limit. They may not already be in another active group. Requires `GROUP_MANAGE`.",
+                "operationId": "addMember",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MemberRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/members/{member}/removal": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Remove a group member",
+                "description": "Removes a member from an active group. The leader cannot be removed (change the leader first), and the group may not drop below the minimum size. Requires `GROUP_MANAGE`.",
+                "operationId": "removeMember",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "member",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/leader": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Change the group leader",
+                "description": "Makes another member the group's leader. Requires `GROUP_MANAGE`.",
+                "operationId": "changeLeader",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MemberRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/kyc/verify": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Verify KYC",
+                "description": "Records that the individual's identity was checked and confirmed. KYC must be pending and the document unexpired. The optional note is kept with the decision. Requires `KYC_DECIDE`.",
+                "operationId": "verifyKyc",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NoteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Individual"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/kyc/reject": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Reject KYC",
+                "description": "Records that the individual's identity could not be confirmed; they are then not eligible for credit. KYC must be pending. Requires `KYC_DECIDE`.",
+                "operationId": "rejectKyc",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NoteRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Individual"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/close": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Close a customer",
+                "description": "Closes the customer for good. An individual must first be removed from any active group; closing a group frees its members to join another. Requires `CUSTOMER_STATUS_MANAGE`.",
+                "operationId": "close",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "oneOf": [
+                                        {
+                                            "$ref": "#/components/schemas/Group"
+                                        },
+                                        {
+                                            "$ref": "#/components/schemas/Individual"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/blacklist": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Blacklist a customer",
+                "description": "Stops an active customer from getting new credit. Existing loans are unaffected. Requires `CUSTOMER_STATUS_MANAGE`.",
+                "operationId": "blacklist",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "oneOf": [
+                                        {
+                                            "$ref": "#/components/schemas/Group"
+                                        },
+                                        {
+                                            "$ref": "#/components/schemas/Individual"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/individuals": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Register an individual",
+                "description": "Creates an active individual with KYC pending. The applicant must meet the minimum age on the business date, the identity document must not be expired, and the same document may not be registered twice. Requires `CUSTOMER_REGISTER`.",
+                "operationId": "registerIndividual",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterIndividualRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Individual"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/groups": {
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Form a group",
+                "description": "Creates an active lending group. The leader must be one of the members, the member count must be within the group size limits, and no member may already be in another active group. Requires `GROUP_MANAGE`.",
+                "operationId": "formGroup",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FormGroupRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Group"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh the token",
+                "description": "Exchanges the token sent with this request, which must still be valid, for a new one with a fresh expiry. The old token stops working at once. Requires login only.",
+                "operationId": "refresh",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Change own password",
+                "description": "Replaces the logged-in user's password. The current password must be right, and the new one must meet the password policy and not repeat a recent password; every broken rule is listed in the error. Requires login only.",
+                "operationId": "changePassword",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChangePasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Me"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Log out",
+                "description": "Ends the token sent with this request: it is refused from now on, even before it expires. Answered with 204. Requires login only.",
+                "operationId": "logout",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Log in",
+                "description": "Checks the username and password and returns a signed token (`accessToken`) with its expiry and the user's permissions. Send it as `Authorization: Bearer <token>` on every other request. Repeated failures lock the account for a while; disabled and locked users are refused. Open to everyone.",
+                "operationId": "login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenView"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/users/{id}": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get a user",
+                "description": "One user by id. Requires `USER_MANAGE`.",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/roles/{name}": {
+            "get": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Get a role",
+                "description": "One role by name. Requires `ROLE_MANAGE`.",
+                "operationId": "get_1",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Delete a role",
+                "description": "Deletes a role. Refused while any user still holds it. Requires `ROLE_MANAGE`.",
+                "operationId": "delete",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/products/{code}": {
+            "get": {
+                "tags": [
+                    "Loan products"
+                ],
+                "summary": "Get a product",
+                "description": "One product by code, active or retired. Requires login only.",
+                "operationId": "get_2",
+                "parameters": [
+                    {
+                        "name": "code",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanProduct"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/permissions": {
+            "get": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "List permissions",
+                "description": "Every permission the application checks. They are fixed in code; roles decide who holds them. Requires `ROLE_MANAGE`.",
+                "operationId": "permissions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "enum": [
+                                            "CUSTOMER_REGISTER",
+                                            "KYC_DECIDE",
+                                            "CUSTOMER_STATUS_MANAGE",
+                                            "GROUP_MANAGE",
+                                            "PRODUCT_MANAGE",
+                                            "LOAN_APPLY",
+                                            "LOAN_APPROVE",
+                                            "LOAN_DISBURSE",
+                                            "REPAYMENT_TAKE",
+                                            "REPAYMENT_REVERSE",
+                                            "LOAN_WRITE_OFF",
+                                            "LEDGER_VIEW",
+                                            "JOURNAL_POST",
+                                            "PERIOD_CLOSE",
+                                            "END_OF_DAY_RUN",
+                                            "AUDIT_VIEW",
+                                            "USER_MANAGE",
+                                            "ROLE_MANAGE"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}": {
+            "get": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Get a loan",
+                "description": "The loan's state and balances, including the payoff amount. Requires login only.",
+                "operationId": "get_3",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoanView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/schedule": {
+            "get": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Repayment schedule",
+                "description": "The instalments with their due dates and what is paid on each. A loan has a schedule only once it is disbursed. Requires login only.",
+                "operationId": "schedule",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RepaymentSchedule"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/loans/{id}/arrears": {
+            "get": {
+                "tags": [
+                    "Loans"
+                ],
+                "summary": "Arrears",
+                "description": "Amounts past due on the business date and days past due, counted from the oldest unpaid due date. Requires login only.",
+                "operationId": "arrears",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Arrears"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/trial-balance": {
+            "get": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Trial balance",
+                "description": "Every account with a non-zero balance in the currency, as debit or credit, with the totals. `balanced` is true when debits equal credits. Requires `LEDGER_VIEW`.",
+                "operationId": "trialBalance",
+                "parameters": [
+                    {
+                        "name": "currency",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TrialBalanceView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/entries/{id}": {
+            "get": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Get a journal entry",
+                "description": "One journal entry with all its lines. Requires `LEDGER_VIEW`.",
+                "operationId": "entry",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntry"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/accounts": {
+            "get": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Chart of accounts",
+                "description": "Every ledger account with its type and whether it is closed. Requires `LEDGER_VIEW`.",
+                "operationId": "accounts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LedgerAccount"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/accounts/{code}/statement": {
+            "get": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Account statement",
+                "description": "Opening balance, every line posted to the account between `from` and `to` (inclusive, by posting date) with a running balance, and the closing balance. Requires `LEDGER_VIEW`.",
+                "operationId": "statement",
+                "parameters": [
+                    {
+                        "name": "code",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "currency",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StatementView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ledger/accounts/{code}/balance": {
+            "get": {
+                "tags": [
+                    "Ledger"
+                ],
+                "summary": "Account balance",
+                "description": "The account's current balance in one currency, as net debit: positive for a debit balance, negative for a credit balance. Requires `LEDGER_VIEW`.",
+                "operationId": "balance",
+                "parameters": [
+                    {
+                        "name": "code",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "currency",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers": {
+            "get": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customers",
+                "description": "One page of every customer, individuals and groups, most recently registered first. `page` counts from 0; `size` is 1 to 100. `total` is the number of customers across every page. Requires login only.",
+                "operationId": "list",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomerPage"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}": {
+            "get": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Get a customer",
+                "description": "An individual or a group by id. Requires login only.",
+                "operationId": "get_4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "oneOf": [
+                                        {
+                                            "$ref": "#/components/schemas/Group"
+                                        },
+                                        {
+                                            "$ref": "#/components/schemas/Individual"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/loans": {
+            "get": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "A customer's loans",
+                "description": "Every loan the customer has borrowed, in any status. Requires login only.",
+                "operationId": "loans",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LoanView"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/eligibility": {
+            "get": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Check credit eligibility",
+                "description": "Whether the customer may take new credit on the business date. An individual must be active, KYC verified and hold an unexpired identity document; a group must be active and every member eligible. Requires login only.",
+                "operationId": "eligibility",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/business-date": {
+            "get": {
+                "tags": [
+                    "Operations"
+                ],
+                "summary": "Current business date",
+                "description": "The accounting day the institution is working in. It moves only through end of day, never with the wall clock. Requires login only.",
+                "operationId": "businessDate",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string",
+                                        "format": "date"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/me": {
+            "get": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Current user",
+                "description": "The logged-in user, their permissions, and whether they must change their password before working. Requires login only.",
+                "operationId": "me",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Me"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/audit": {
+            "get": {
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Audit trail",
+                "description": "Every POST, PUT, PATCH and DELETE in arrival order, with the user, the business date and the outcome. Pass `user` to see only one user's requests. Requires `AUDIT_VIEW`.",
+                "operationId": "entries",
+                "parameters": [
+                    {
+                        "name": "user",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AuditEntry"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "RolesRequest": {
+                "type": "object",
+                "properties": {
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "uniqueItems": true
+                    }
+                },
+                "required": [
+                    "roles"
+                ]
+            },
+            "UserView": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "DISABLED"
+                        ]
+                    },
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "uniqueItems": true
+                    },
+                    "mustChangePassword": {
+                        "type": "boolean"
+                    },
+                    "locked": {
+                        "type": "boolean"
+                    },
+                    "lockedUntil": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "passwordChangedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "PermissionsRequest": {
+                "type": "object",
+                "properties": {
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "CUSTOMER_REGISTER",
+                                "KYC_DECIDE",
+                                "CUSTOMER_STATUS_MANAGE",
+                                "GROUP_MANAGE",
+                                "PRODUCT_MANAGE",
+                                "LOAN_APPLY",
+                                "LOAN_APPROVE",
+                                "LOAN_DISBURSE",
+                                "REPAYMENT_TAKE",
+                                "REPAYMENT_REVERSE",
+                                "LOAN_WRITE_OFF",
+                                "LEDGER_VIEW",
+                                "JOURNAL_POST",
+                                "PERIOD_CLOSE",
+                                "END_OF_DAY_RUN",
+                                "AUDIT_VIEW",
+                                "USER_MANAGE",
+                                "ROLE_MANAGE"
+                            ]
+                        },
+                        "uniqueItems": true
+                    }
+                },
+                "required": [
+                    "permissions"
+                ]
+            },
+            "Role": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "CUSTOMER_REGISTER",
+                                "KYC_DECIDE",
+                                "CUSTOMER_STATUS_MANAGE",
+                                "GROUP_MANAGE",
+                                "PRODUCT_MANAGE",
+                                "LOAN_APPLY",
+                                "LOAN_APPROVE",
+                                "LOAN_DISBURSE",
+                                "REPAYMENT_TAKE",
+                                "REPAYMENT_REVERSE",
+                                "LOAN_WRITE_OFF",
+                                "LEDGER_VIEW",
+                                "JOURNAL_POST",
+                                "PERIOD_CLOSE",
+                                "END_OF_DAY_RUN",
+                                "AUDIT_VIEW",
+                                "USER_MANAGE",
+                                "ROLE_MANAGE"
+                            ]
+                        },
+                        "uniqueItems": true
+                    }
+                }
+            },
+            "CreateUserRequest": {
+                "type": "object",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "displayName": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "uniqueItems": true
+                    }
+                },
+                "required": [
+                    "displayName",
+                    "roles",
+                    "username"
+                ]
+            },
+            "IssuedPasswordView": {
+                "type": "object",
+                "properties": {
+                    "user": {
+                        "$ref": "#/components/schemas/UserView"
+                    },
+                    "temporaryPassword": {
+                        "type": "string"
+                    }
+                }
+            },
+            "RoleRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "CUSTOMER_REGISTER",
+                                "KYC_DECIDE",
+                                "CUSTOMER_STATUS_MANAGE",
+                                "GROUP_MANAGE",
+                                "PRODUCT_MANAGE",
+                                "LOAN_APPLY",
+                                "LOAN_APPROVE",
+                                "LOAN_DISBURSE",
+                                "REPAYMENT_TAKE",
+                                "REPAYMENT_REVERSE",
+                                "LOAN_WRITE_OFF",
+                                "LEDGER_VIEW",
+                                "JOURNAL_POST",
+                                "PERIOD_CLOSE",
+                                "END_OF_DAY_RUN",
+                                "AUDIT_VIEW",
+                                "USER_MANAGE",
+                                "ROLE_MANAGE"
+                            ]
+                        },
+                        "uniqueItems": true
+                    }
+                },
+                "required": [
+                    "name",
+                    "permissions"
+                ]
+            },
+            "AccountsDto": {
+                "type": "object",
+                "properties": {
+                    "loanPortfolio": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "interestReceivable": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "interestIncome": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "feeIncome": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "penaltyReceivable": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "penaltyIncome": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "disbursementSource": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "provisionAllowance": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "provisionExpense": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "disbursementSource",
+                    "feeIncome",
+                    "interestIncome",
+                    "interestReceivable",
+                    "loanPortfolio",
+                    "penaltyIncome",
+                    "penaltyReceivable",
+                    "provisionAllowance",
+                    "provisionExpense"
+                ]
+            },
+            "FeeDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "fixedAmount": {
+                        "type": "string"
+                    },
+                    "percentOfPrincipal": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "PenaltyDto": {
+                "type": "object",
+                "properties": {
+                    "annualRatePercent": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "graceDays": {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "annualRatePercent"
+                ]
+            },
+            "ProductRequest": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "currency": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "borrowerTypes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "INDIVIDUAL",
+                                "GROUP"
+                            ]
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
+                    },
+                    "interestMethod": {
+                        "type": "string",
+                        "enum": [
+                            "FLAT",
+                            "DECLINING_BALANCE"
+                        ]
+                    },
+                    "dayCount": {
+                        "type": "string",
+                        "enum": [
+                            "ACTUAL_365",
+                            "ACTUAL_360",
+                            "THIRTY_E_360"
+                        ]
+                    },
+                    "frequency": {
+                        "type": "string",
+                        "enum": [
+                            "WEEKLY",
+                            "BIWEEKLY",
+                            "MONTHLY"
+                        ]
+                    },
+                    "minAnnualRatePercent": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "maxAnnualRatePercent": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "minPrincipal": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "maxPrincipal": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "minInstalments": {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 1
+                    },
+                    "maxInstalments": {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 1
+                    },
+                    "disbursementFees": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FeeDto"
+                        }
+                    },
+                    "penalty": {
+                        "$ref": "#/components/schemas/PenaltyDto"
+                    },
+                    "allocationOrder": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "PENALTY",
+                                "FEE",
+                                "INTEREST",
+                                "PRINCIPAL"
+                            ]
+                        }
+                    },
+                    "accounts": {
+                        "$ref": "#/components/schemas/AccountsDto"
+                    }
+                },
+                "required": [
+                    "accounts",
+                    "borrowerTypes",
+                    "code",
+                    "currency",
+                    "dayCount",
+                    "frequency",
+                    "interestMethod",
+                    "maxAnnualRatePercent",
+                    "maxPrincipal",
+                    "minAnnualRatePercent",
+                    "minPrincipal",
+                    "name"
+                ]
+            },
+            "BoundsInteger": {
+                "type": "object",
+                "properties": {
+                    "min": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "max": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "BoundsInterestRate": {
+                "type": "object",
+                "properties": {
+                    "min": {
+                        "type": "object",
+                        "properties": {
+                            "annualPercent": {
+                                "type": "string",
+                                "example": "24"
+                            }
+                        },
+                        "required": [
+                            "annualPercent"
+                        ]
+                    },
+                    "max": {
+                        "type": "object",
+                        "properties": {
+                            "annualPercent": {
+                                "type": "string",
+                                "example": "24"
+                            }
+                        },
+                        "required": [
+                            "annualPercent"
+                        ]
+                    }
+                }
+            },
+            "BoundsMoney": {
+                "type": "object",
+                "properties": {
+                    "min": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "max": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    }
+                }
+            },
+            "DisbursementFee": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Fixed"
+                            },
+                            {
+                                "$ref": "#/components/schemas/PercentOfPrincipal"
+                            }
+                        ]
+                    }
+                }
+            },
+            "FeeAmount": {},
+            "Fixed": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/FeeAmount"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "object",
+                                "properties": {
+                                    "amount": {
+                                        "type": "string",
+                                        "description": "Decimal amount as a string, never a floating-point number",
+                                        "example": "1000.00"
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "description": "ISO 4217 code",
+                                        "example": "MNT"
+                                    }
+                                },
+                                "required": [
+                                    "amount",
+                                    "currency"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            },
+            "LoanProduct": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "object",
+                        "properties": {
+                            "currencyCode": {
+                                "type": "string"
+                            },
+                            "displayName": {
+                                "type": "string"
+                            },
+                            "symbol": {
+                                "type": "string"
+                            },
+                            "defaultFractionDigits": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "numericCode": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "numericCodeAsString": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "borrowerTypes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "INDIVIDUAL",
+                                "GROUP"
+                            ]
+                        },
+                        "uniqueItems": true
+                    },
+                    "interestMethod": {
+                        "type": "string",
+                        "enum": [
+                            "FLAT",
+                            "DECLINING_BALANCE"
+                        ]
+                    },
+                    "dayCount": {
+                        "type": "string",
+                        "enum": [
+                            "ACTUAL_365",
+                            "ACTUAL_360",
+                            "THIRTY_E_360"
+                        ]
+                    },
+                    "frequency": {
+                        "type": "string",
+                        "enum": [
+                            "WEEKLY",
+                            "BIWEEKLY",
+                            "MONTHLY"
+                        ]
+                    },
+                    "interestRate": {
+                        "$ref": "#/components/schemas/BoundsInterestRate"
+                    },
+                    "principal": {
+                        "$ref": "#/components/schemas/BoundsMoney"
+                    },
+                    "instalments": {
+                        "$ref": "#/components/schemas/BoundsInteger"
+                    },
+                    "disbursementFees": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DisbursementFee"
+                        }
+                    },
+                    "penalty": {
+                        "$ref": "#/components/schemas/PenaltyRule"
+                    },
+                    "allocationOrder": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "PENALTY",
+                                "FEE",
+                                "INTEREST",
+                                "PRINCIPAL"
+                            ]
+                        }
+                    },
+                    "accounts": {
+                        "$ref": "#/components/schemas/ProductAccounts"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "RETIRED"
+                        ]
+                    },
+                    "active": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PenaltyRule": {
+                "type": "object",
+                "properties": {
+                    "rate": {
+                        "type": "object",
+                        "properties": {
+                            "annualPercent": {
+                                "type": "string",
+                                "example": "24"
+                            }
+                        },
+                        "required": [
+                            "annualPercent"
+                        ]
+                    },
+                    "graceDays": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "PercentOfPrincipal": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/FeeAmount"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "fraction": {
+                                "type": "number"
+                            }
+                        }
+                    }
+                ]
+            },
+            "ProductAccounts": {
+                "type": "object",
+                "properties": {
+                    "loanPortfolio": {
+                        "type": "string"
+                    },
+                    "interestReceivable": {
+                        "type": "string"
+                    },
+                    "interestIncome": {
+                        "type": "string"
+                    },
+                    "feeIncome": {
+                        "type": "string"
+                    },
+                    "penaltyReceivable": {
+                        "type": "string"
+                    },
+                    "penaltyIncome": {
+                        "type": "string"
+                    },
+                    "disbursementSource": {
+                        "type": "string"
+                    },
+                    "provisionAllowance": {
+                        "type": "string"
+                    },
+                    "provisionExpense": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ApplyRequest": {
+                "type": "object",
+                "properties": {
+                    "borrower": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "product": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "principal": {
+                        "$ref": "#/components/schemas/MoneyDto"
+                    },
+                    "annualRatePercent": {
+                        "type": "string"
+                    },
+                    "monthlyRatePercent": {
+                        "type": "string"
+                    },
+                    "instalments": {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "borrower",
+                    "principal",
+                    "product"
+                ]
+            },
+            "MoneyDto": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "currency": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "amount",
+                    "currency"
+                ]
+            },
+            "Decision": {
+                "type": "object",
+                "properties": {
+                    "by": {
+                        "type": "string"
+                    },
+                    "on": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "note": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LoanTerms": {
+                "type": "object",
+                "properties": {
+                    "principal": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "rate": {
+                        "type": "object",
+                        "properties": {
+                            "annualPercent": {
+                                "type": "string",
+                                "example": "24"
+                            }
+                        },
+                        "required": [
+                            "annualPercent"
+                        ]
+                    },
+                    "instalments": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "LoanView": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "borrower": {
+                        "type": "string"
+                    },
+                    "borrowerType": {
+                        "type": "string",
+                        "enum": [
+                            "INDIVIDUAL",
+                            "GROUP"
+                        ]
+                    },
+                    "product": {
+                        "type": "string"
+                    },
+                    "terms": {
+                        "$ref": "#/components/schemas/LoanTerms"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "APPLIED",
+                            "APPROVED",
+                            "REJECTED",
+                            "ACTIVE",
+                            "CLOSED",
+                            "WRITTEN_OFF"
+                        ]
+                    },
+                    "application": {
+                        "$ref": "#/components/schemas/Decision"
+                    },
+                    "approval": {
+                        "$ref": "#/components/schemas/Decision"
+                    },
+                    "disbursedOn": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "maturityDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "principalOutstanding": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "interestReceivable": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "penaltyOutstanding": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "payoffAmount": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "provision": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "writeOff": {
+                        "$ref": "#/components/schemas/Decision"
+                    }
+                }
+            },
+            "NoteRequest": {
+                "type": "object",
+                "properties": {
+                    "note": {
+                        "type": "string"
+                    }
+                }
+            },
+            "RepaymentRequest": {
+                "type": "object",
+                "properties": {
+                    "reference": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount": {
+                        "$ref": "#/components/schemas/MoneyDto"
+                    },
+                    "paidInto": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "reference"
+                ]
+            },
+            "Allocation": {
+                "type": "object",
+                "properties": {
+                    "penalty": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "instalments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ToInstalment"
+                        }
+                    }
+                }
+            },
+            "Repayment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "receivedOn": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "amount": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "paidInto": {
+                        "type": "string"
+                    },
+                    "allocation": {
+                        "$ref": "#/components/schemas/Allocation"
+                    },
+                    "reversedBy": {
+                        "type": "string"
+                    },
+                    "reversed": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "ToInstalment": {
+                "type": "object",
+                "properties": {
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "principal": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "interest": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    }
+                }
+            },
+            "ReversalRequest": {
+                "type": "object",
+                "properties": {
+                    "reversalReference": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "reversalReference"
+                ]
+            },
+            "ClosePeriodRequest": {
+                "type": "object",
+                "properties": {
+                    "through": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "through"
+                ]
+            },
+            "LineDto": {
+                "type": "object",
+                "properties": {
+                    "account": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "side": {
+                        "type": "string",
+                        "enum": [
+                            "DEBIT",
+                            "CREDIT"
+                        ]
+                    },
+                    "amount": {
+                        "$ref": "#/components/schemas/MoneyDto"
+                    },
+                    "narrative": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "account",
+                    "amount",
+                    "side"
+                ]
+            },
+            "ManualEntryRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "valueDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/LineDto"
+                        },
+                        "minItems": 1
+                    }
+                },
+                "required": [
+                    "description",
+                    "id",
+                    "lines"
+                ]
+            },
+            "JournalEntry": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "postingDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "valueDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/JournalLine"
+                        }
+                    },
+                    "reversalOf": {
+                        "type": "string"
+                    },
+                    "reversal": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "JournalLine": {
+                "type": "object",
+                "properties": {
+                    "account": {
+                        "type": "string"
+                    },
+                    "side": {
+                        "type": "string",
+                        "enum": [
+                            "DEBIT",
+                            "CREDIT"
+                        ]
+                    },
+                    "amount": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "narrative": {
+                        "type": "string"
+                    }
+                }
+            },
+            "EndOfDayView": {
+                "type": "object",
+                "properties": {
+                    "processedDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "businessDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "complete": {
+                        "type": "boolean"
+                    },
+                    "loans": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/LoanResult"
+                        }
+                    },
+                    "failures": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Failure"
+                        }
+                    }
+                }
+            },
+            "Failure": {
+                "type": "object",
+                "properties": {
+                    "loan": {
+                        "type": "string"
+                    },
+                    "error": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LoanResult": {
+                "type": "object",
+                "properties": {
+                    "loan": {
+                        "type": "string"
+                    },
+                    "daysPastDue": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "riskClass": {
+                        "$ref": "#/components/schemas/RiskClass"
+                    },
+                    "interestAccrued": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "penaltyCharged": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "provision": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    }
+                }
+            },
+            "RiskClass": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "fromDaysPastDue": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "provisionRate": {
+                        "type": "number"
+                    }
+                }
+            },
+            "Customer": {
+                "type": "object",
+                "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                        "INDIVIDUAL": "#/components/schemas/Individual",
+                        "GROUP": "#/components/schemas/Group"
+                    }
+                },
+                "properties": {
+                    "active": {
+                        "type": "boolean"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "INDIVIDUAL",
+                            "GROUP"
+                        ]
+                    }
+                },
+                "required": [
+                    "kind"
+                ]
+            },
+            "Group": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Customer"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "leader": {
+                                "type": "string"
+                            },
+                            "members": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "registeredOn": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "ACTIVE",
+                                    "BLACKLISTED",
+                                    "CLOSED"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            },
+            "IdentityDocument": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "NATIONAL_ID",
+                            "PASSPORT"
+                        ]
+                    },
+                    "number": {
+                        "type": "string"
+                    },
+                    "issuingCountry": {
+                        "type": "string"
+                    },
+                    "expiresOn": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                }
+            },
+            "Individual": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Customer"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "$ref": "#/components/schemas/PersonName"
+                            },
+                            "dateOfBirth": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "identity": {
+                                "$ref": "#/components/schemas/IdentityDocument"
+                            },
+                            "phone": {
+                                "type": "string"
+                            },
+                            "address": {
+                                "type": "string"
+                            },
+                            "registeredOn": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "ACTIVE",
+                                    "BLACKLISTED",
+                                    "CLOSED"
+                                ]
+                            },
+                            "kyc": {
+                                "$ref": "#/components/schemas/Kyc"
+                            }
+                        }
+                    }
+                ]
+            },
+            "Kyc": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "PENDING",
+                            "VERIFIED",
+                            "REJECTED"
+                        ]
+                    },
+                    "decidedOn": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "decidedBy": {
+                        "type": "string"
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "verified": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PersonName": {
+                "type": "object",
+                "properties": {
+                    "givenName": {
+                        "type": "string"
+                    },
+                    "familyName": {
+                        "type": "string"
+                    }
+                }
+            },
+            "MemberRequest": {
+                "type": "object",
+                "properties": {
+                    "member": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "member"
+                ]
+            },
+            "DocumentDto": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "NATIONAL_ID",
+                            "PASSPORT"
+                        ]
+                    },
+                    "number": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "issuingCountry": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "expiresOn": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "issuingCountry",
+                    "number",
+                    "type"
+                ]
+            },
+            "RegisterIndividualRequest": {
+                "type": "object",
+                "properties": {
+                    "givenName": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "familyName": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "dateOfBirth": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "document": {
+                        "$ref": "#/components/schemas/DocumentDto"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "address": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "address",
+                    "dateOfBirth",
+                    "document",
+                    "familyName",
+                    "givenName",
+                    "phone"
+                ]
+            },
+            "FormGroupRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "leader": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "members": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "minItems": 1
+                    }
+                },
+                "required": [
+                    "leader",
+                    "members",
+                    "name"
+                ]
+            },
+            "Me": {
+                "type": "object",
+                "properties": {
+                    "username": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "CUSTOMER_REGISTER",
+                                "KYC_DECIDE",
+                                "CUSTOMER_STATUS_MANAGE",
+                                "GROUP_MANAGE",
+                                "PRODUCT_MANAGE",
+                                "LOAN_APPLY",
+                                "LOAN_APPROVE",
+                                "LOAN_DISBURSE",
+                                "REPAYMENT_TAKE",
+                                "REPAYMENT_REVERSE",
+                                "LOAN_WRITE_OFF",
+                                "LEDGER_VIEW",
+                                "JOURNAL_POST",
+                                "PERIOD_CLOSE",
+                                "END_OF_DAY_RUN",
+                                "AUDIT_VIEW",
+                                "USER_MANAGE",
+                                "ROLE_MANAGE"
+                            ]
+                        },
+                        "uniqueItems": true
+                    },
+                    "mustChangePassword": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "TokenView": {
+                "type": "object",
+                "properties": {
+                    "accessToken": {
+                        "type": "string"
+                    },
+                    "tokenType": {
+                        "type": "string"
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/Me"
+                    }
+                }
+            },
+            "ChangePasswordRequest": {
+                "type": "object",
+                "properties": {
+                    "currentPassword": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "newPassword": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "currentPassword",
+                    "newPassword"
+                ]
+            },
+            "LoginRequest": {
+                "type": "object",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "password": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "password",
+                    "username"
+                ]
+            },
+            "Instalment": {
+                "type": "object",
+                "properties": {
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "periodStart": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "dueDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "principal": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "interest": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "principalPaid": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "interestPaid": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "paid": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "RepaymentSchedule": {
+                "type": "object",
+                "properties": {
+                    "instalments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Instalment"
+                        }
+                    }
+                }
+            },
+            "Arrears": {
+                "type": "object",
+                "properties": {
+                    "asOf": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "daysPastDue": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "oldestDueDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "overduePrincipal": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "overdueInterest": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "penaltyOutstanding": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "overdue": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Row": {
+                "type": "object",
+                "properties": {
+                    "account": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "debit": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "credit": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    }
+                }
+            },
+            "TrialBalanceView": {
+                "type": "object",
+                "properties": {
+                    "currency": {
+                        "type": "object",
+                        "properties": {
+                            "currencyCode": {
+                                "type": "string"
+                            },
+                            "displayName": {
+                                "type": "string"
+                            },
+                            "symbol": {
+                                "type": "string"
+                            },
+                            "defaultFractionDigits": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "numericCode": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "numericCodeAsString": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "businessDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Row"
+                        }
+                    },
+                    "totalDebits": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "totalCredits": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "balanced": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "LedgerAccount": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "ASSET",
+                            "LIABILITY",
+                            "EQUITY",
+                            "INCOME",
+                            "EXPENSE"
+                        ]
+                    },
+                    "contra": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Balance": {
+                "type": "object",
+                "properties": {
+                    "net": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "zero": {
+                        "type": "boolean"
+                    },
+                    "credit": {
+                        "type": "boolean"
+                    },
+                    "debit": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Line": {
+                "type": "object",
+                "properties": {
+                    "postingDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "valueDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "entryId": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "side": {
+                        "type": "string",
+                        "enum": [
+                            "DEBIT",
+                            "CREDIT"
+                        ]
+                    },
+                    "amount": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "balanceAfter": {
+                        "$ref": "#/components/schemas/Balance"
+                    }
+                }
+            },
+            "StatementView": {
+                "type": "object",
+                "properties": {
+                    "account": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "object",
+                        "properties": {
+                            "currencyCode": {
+                                "type": "string"
+                            },
+                            "displayName": {
+                                "type": "string"
+                            },
+                            "symbol": {
+                                "type": "string"
+                            },
+                            "defaultFractionDigits": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "numericCode": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "numericCodeAsString": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "opening": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Line"
+                        }
+                    },
+                    "closing": {
+                        "type": "object",
+                        "properties": {
+                            "amount": {
+                                "type": "string",
+                                "description": "Decimal amount as a string, never a floating-point number",
+                                "example": "1000.00"
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "ISO 4217 code",
+                                "example": "MNT"
+                            }
+                        },
+                        "required": [
+                            "amount",
+                            "currency"
+                        ]
+                    }
+                }
+            },
+            "CustomerPage": {
+                "type": "object",
+                "properties": {
+                    "customers": {
+                        "type": "array",
+                        "items": {
+                            "oneOf": [
+                                {
+                                    "$ref": "#/components/schemas/Group"
+                                },
+                                {
+                                    "$ref": "#/components/schemas/Individual"
+                                }
+                            ]
+                        }
+                    },
+                    "page": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "size": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "AuditEntry": {
+                "type": "object",
+                "properties": {
+                    "at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "businessDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "user": {
+                        "type": "string"
+                    },
+                    "method": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "bearer-jwt": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}
